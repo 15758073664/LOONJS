@@ -1,0 +1,12 @@
+/*
+获取中国联通签到 Cookie
+*/
+
+const cookie = $request.headers["Cookie"];
+
+if (cookie) {
+  $persistentStore.write(cookie, "UNICOM_COOKIE");
+  $notification.post("中国联通", "Cookie 获取成功", "可以关闭重写了");
+}
+
+$done({});
