@@ -1,41 +1,54 @@
 /**
- * OPPO 商城 签到
+ * OPPO 商城 签到（优化版）
  */
 
 const TOKEN_KEY = "oppo_constToken";
 const ACTIVITY_KEY = "oppo_activityId";
+const TIMEOUT = 5000;
 
 const token = $persistentStore.read(TOKEN_KEY);
 const activityId = $persistentStore.read(ACTIVITY_KEY);
 
+function notify(title, msg) {
+  $notification.post(title, "", msg);
+}
+
 if (!token) {
-  $notification.post("OPPO 商城签到", "", "❌ 未获取 constCookie");
+  notify("OPPO 商城签到", "❌ 未获取 constToken");
   return $done();
 }
 
 if (!activityId) {
-  $notification.post(
-    "OPPO 商城签到",
-    "",
-    "❌ 未获取 activityId，请先打开一次签到页"
-  );
+  notify("OPPO 商城签到", "❌ 未获取 activityId，请先手动打开签到页");
   return $done();
 }
 
 const headers = {
-  "User-Agent": "oppostore/406101 IOS/26.2",
+  "User-Agent": "oppostore/406101 (iPhone; iOS 16.6)",
   "Content-Type": "application/json",
   "constToken": token
 };
 
-// ① 获取签到详情（必须）
+// 请求封装
+function request(method, url, body, cb) {
+  const options = {
+    url,
+    headers,
+    timeout: TIMEOUT
+  };
+  if (body) options.body = body;
+
+  $httpClient[method](options, cb);
+}
+
+// ① 获取签到详情
 const detailUrl =
   "https://hd.opposhop.cn/api/cn/oapi/marketing/cumulativeSignIn/getSignInDetail?activityId=" +
   activityId;
 
-$httpClient.get({ url: detailUrl, headers }, (err, resp, data) => {
+request("get", detailUrl, null, (err, resp, data) => {
   if (err) {
-    $notification.post("OPPO 商城签到", "", "❌ 获取签到详情失败");
+    notify("OPPO 商城签到", "❌ 获取签到详情失败");
     return $done();
   }
 
@@ -43,45 +56,35 @@ $httpClient.get({ url: detailUrl, headers }, (err, resp, data) => {
   try {
     detail = JSON.parse(data);
   } catch {
-    $notification.post("OPPO 商城签到", "", "❌ 签到详情解析失败");
+    notify("OPPO 商城签到", "❌ 签到详情解析失败");
     return $done();
   }
 
   if (detail.code !== 200 || !detail.data) {
-    $notification.post(
-      "OPPO 商城签到",
-      "",
-      detail.message || "❌ 签到活动无效"
-    );
+    notify("OPPO 商城签到", detail.message || "❌ 签到活动无效");
     return $done();
   }
 
   const actionId = detail.data.creditsAddActionId;
   if (!actionId) {
-    $notification.post(
-      "OPPO 商城签到",
-      "",
-      "❌ 未获取 creditsAddActionId"
-    );
+    notify("OPPO 商城签到", "❌ 未获取 actionId（可能活动已结束）");
     return $done();
   }
 
   // ② 执行签到
   const body = JSON.stringify({
-    activityId: activityId,
+    activityId,
     creditsAddActionId: actionId,
     business: 1
   });
 
-  $httpClient.post(
-    {
-      url: "https://hd.opposhop.cn/api/cn/oapi/marketing/cumulativeSignIn/signIn",
-      headers,
-      body
-    },
+  request(
+    "post",
+    "https://hd.opposhop.cn/api/cn/oapi/marketing/cumulativeSignIn/signIn",
+    body,
     (e, r, d) => {
       if (e) {
-        $notification.post("OPPO 商城签到", "", "❌ 签到请求失败");
+        notify("OPPO 商城签到", "❌ 签到请求失败");
         return $done();
       }
 
@@ -89,27 +92,27 @@ $httpClient.get({ url: detailUrl, headers }, (err, resp, data) => {
       try {
         res = JSON.parse(d);
       } catch {
-        $notification.post("OPPO 商城签到", "", "❌ 签到返回解析失败");
+        notify("OPPO 商城签到", "❌ 签到返回解析失败");
         return $done();
       }
 
-      // ✅ 成功
       if (res.code === 200 && res.data?.receiveStatus) {
         const reward = res.data.awardValue || 0;
-        $notification.post(
-          "OPPO 商城签到成功",
-          "",
-          `🎉 获得 ${reward} 积分`
-        );
+        notify("OPPO 商城签到成功", `🎉 获得 ${reward} 积分`);
         return $done();
       }
 
-      // ⚠️ 已签到 / 活动提示
-      $notification.post(
-        "OPPO 商城签到",
-        "",
-        res.message || "⚠️ 今日可能已签到"
-      );
+      if (res.message?.includes("已签到")) {
+        notify("OPPO 商城签到", "✅ 今日已签到");
+        return $done();
+      }
+
+      if (res.message?.includes("token")) {
+        notify("OPPO 商城签到", "⚠️ 登录失效，请重新抓 constToken");
+        return $done();
+      }
+
+      notify("OPPO 商城签到", res.message || "⚠️ 签到失败");
       return $done();
     }
   );
