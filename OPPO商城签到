@@ -1,5 +1,5 @@
 /**
- * OPPO 商城 签到
+ * OPPO 商城 签到（最终稳定版｜无 actionId）
  */
 
 const TOKEN_KEY = "oppo_constToken";
@@ -30,7 +30,7 @@ const headers = {
 };
 
 const body = JSON.stringify({
-  activityId: activityId,
+  activityId,
   business: 1
 });
 
@@ -47,15 +47,28 @@ $httpClient.post(
       return $done();
     }
 
-    let res;
-    try {
-      res = JSON.parse(data);
-    } catch {
-      notify("❌ 返回数据解析失败");
+    // 🔥 关键修复点：空返回
+    if (!data) {
+      notify("⚠️ 接口无返回（可能已签到）");
       return $done();
     }
 
-    // ✅ 成功签到
+    // 🔥 关键修复点：非 JSON
+    const text = data.trim();
+    if (!text.startsWith("{")) {
+      notify(`⚠️ 非 JSON 返回：${text.slice(0, 50)}`);
+      return $done();
+    }
+
+    let res;
+    try {
+      res = JSON.parse(text);
+    } catch {
+      notify("❌ JSON 解析失败");
+      return $done();
+    }
+
+    // ✅ 成功
     if (res.code === 200 && res.data?.receiveStatus) {
       const reward = res.data.awardValue || 0;
       notify(`🎉 签到成功，获得 ${reward} 积分`);
@@ -71,12 +84,6 @@ $httpClient.post(
     // ⚠️ 登录态失效
     if (res.message?.includes("token")) {
       notify("⚠️ 登录失效，请重新抓 constToken");
-      return $done();
-    }
-
-    // ⚠️ 活动异常
-    if (res.message?.includes("活动")) {
-      notify(`⚠️ 活动异常：${res.message}`);
       return $done();
     }
 
