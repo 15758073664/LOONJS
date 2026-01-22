@@ -24,7 +24,7 @@ if (!activityId) {
 }
 
 const headers = {
-  "User-Agent": "oppostore/406101 (iPhone; iOS 16.6)",
+  "User-Agent": "oppostore/406101 (iPhone; iOS 26.2)",
   "Content-Type": "application/json",
   "constToken": token
 };
